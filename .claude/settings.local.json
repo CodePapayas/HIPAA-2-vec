@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv sync *)",
+      "Bash(python3 -m pip install -e \".[dev]\")",
+      "Bash(curl -Ls https://astral.sh/uv/install.sh)",
+      "Bash(sh)",
+      "Bash(pip install *)",
+      "Bash(uv venv *)",
+      "Bash(uv run *)",
+      "Bash(uv add *)",
+      "Bash(curl -s \"https://www.ecfr.gov/api/versioner/v1/full/2026-04-16/title-45.xml\" --range 0-3000)",
+      "Bash(.venv/bin/python *)",
+      "Bash(.venv/bin/pytest *)",
+      "Bash(timeout 10 .venv/bin/hipaa-mcp serve)",
+      "Bash(grep -v '^$')",
+      "Bash(python3 -c \"import sys,json; [print\\(json.dumps\\(json.loads\\(l\\), indent=2\\)\\) for l in sys.stdin if l.strip\\(\\) and '\\\\\"id\\\\\":2' in l]\")",
+      "Bash(claude mcp *)",
+      "Read(//home/zachw/.claude/**)",
+      "Skill(update-config)",
+      "mcp__hipaa-mcp__search_regulations",
+      "mcp__hipaa-mcp__list_glossary_terms",
+      "mcp__hipaa-mcp__get_section",
+      "Bash(python -m spacy download en_core_web_sm)",
+      "mcp__hipaa-mcp__add_glossary_term"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "hipaa-mcp"
+  ]
+}

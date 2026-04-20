@@ -1,0 +1,228 @@
+version: 1
+entries:
+  # Third-party / vendor relationships
+  - term: vendor
+    maps_to: business associate
+    relationship: synonym
+    notes: Any vendor handling PHI on your behalf is a BA under HIPAA
+
+  - term: subprocessor
+    maps_to: business associate
+    relationship: synonym
+
+  - term: third party
+    maps_to: business associate
+    relationship: synonym
+
+  - term: contractor
+    maps_to: business associate
+    relationship: synonym
+
+  - term: service provider
+    maps_to: business associate
+    relationship: synonym
+
+  - term: partner
+    maps_to: business associate
+    relationship: synonym
+    notes: Only when the partner handles PHI
+
+  - term: SaaS
+    maps_to: business associate
+    relationship: synonym
+    notes: A SaaS tool processing PHI needs a BAA
+
+  - term: BAA
+    maps_to: business associate agreement
+    relationship: synonym
+
+  # Disclosure / transmission
+  - term: share
+    maps_to: disclosure
+    relationship: synonym
+
+  - term: send
+    maps_to: disclosure
+    relationship: synonym
+
+  - term: transmit
+    maps_to: disclosure
+    relationship: synonym
+
+  - term: transfer
+    maps_to: disclosure
+    relationship: synonym
+
+  - term: expose
+    maps_to: disclosure
+    relationship: synonym
+
+  - term: give access
+    maps_to: disclosure
+    relationship: synonym
+
+  # Destruction / deletion
+  - term: delete
+    maps_to: destruction
+    relationship: synonym
+    notes: HIPAA uses "destruction" not "deletion"
+
+  - term: remove
+    maps_to: destruction
+    relationship: synonym
+
+  - term: purge
+    maps_to: destruction
+    relationship: synonym
+
+  - term: wipe
+    maps_to: destruction
+    relationship: synonym
+
+  - term: shred
+    maps_to: destruction
+    relationship: synonym
+
+  # Consent / authorization
+  - term: consent
+    maps_to: authorization
+    relationship: synonym
+    notes: HIPAA term is "authorization" not "consent" (consent is narrower, used in treatment context)
+
+  - term: permission
+    maps_to: authorization
+    relationship: synonym
+
+  - term: opt-in
+    maps_to: authorization
+    relationship: synonym
+
+  # PHI / patient data terms
+  - term: patient data
+    maps_to: protected health information
+    relationship: synonym
+
+  - term: health data
+    maps_to: protected health information
+    relationship: synonym
+
+  - term: medical record
+    maps_to: protected health information
+    relationship: hyponym
+
+  - term: EHR
+    maps_to: protected health information
+    relationship: hyponym
+
+  - term: de-identified
+    maps_to: protected health information
+    relationship: anti
+    notes: De-identified data is NOT PHI per § 164.514
+
+  - term: anonymized
+    maps_to: protected health information
+    relationship: anti
+    notes: If properly anonymized under Safe Harbor or Expert Determination, not PHI
+
+  - term: aggregated
+    maps_to: protected health information
+    relationship: anti
+    scope:
+      - de-identified
+      - aggregate
+    notes: Aggregate stats without identifiers are not PHI
+
+  # Logging / audit
+  - term: logging
+    maps_to: audit controls
+    relationship: synonym
+    notes: HIPAA § 164.312(b) requires audit controls / activity logs
+
+  - term: audit log
+    maps_to: audit controls
+    relationship: synonym
+
+  - term: access log
+    maps_to: audit controls
+    relationship: synonym
+
+  - term: event log
+    maps_to: audit controls
+    relationship: synonym
+
+  # Security / access control
+  - term: password
+    maps_to: authentication
+    relationship: hyponym
+
+  - term: MFA
+    maps_to: authentication
+    relationship: hyponym
+
+  - term: SSO
+    maps_to: authentication
+    relationship: hyponym
+
+  - term: encryption
+    maps_to: encryption and decryption
+    relationship: synonym
+
+  - term: encrypt at rest
+    maps_to: encryption and decryption
+    relationship: synonym
+
+  - term: encrypt in transit
+    maps_to: transmission security
+    relationship: synonym
+
+  - term: TLS
+    maps_to: transmission security
+    relationship: hyponym
+
+  - term: role-based access
+    maps_to: access control
+    relationship: hyponym
+
+  - term: RBAC
+    maps_to: access control
+    relationship: hyponym
+
+  - term: least privilege
+    maps_to: minimum necessary
+    relationship: synonym
+
+  # Breach / incident
+  - term: breach
+    maps_to: breach notification
+    relationship: synonym
+
+  - term: data leak
+    maps_to: breach notification
+    relationship: synonym
+
+  - term: incident
+    maps_to: breach notification
+    relationship: contextual
+    scope:
+      - data
+      - PHI
+      - security
+
+  # Treatment / payment / operations
+  - term: TPO
+    maps_to: treatment payment operations
+    relationship: synonym
+
+  # Workforce
+  - term: employee
+    maps_to: workforce member
+    relationship: synonym
+
+  - term: staff
+    maps_to: workforce member
+    relationship: synonym
+
+  - term: developer
+    maps_to: workforce member
+    relationship: hyponym
+    notes: Developers with PHI access are workforce members requiring training

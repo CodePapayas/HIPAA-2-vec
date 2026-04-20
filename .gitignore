@@ -1,0 +1,30 @@
+# deps / build
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+dist/
+build/
+*.egg-info/
+
+# tool caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# user data (chromadb, bm25 index, user glossary)
+data/chroma/
+data/bm25_index.pkl
+data/user_glossary.yaml
+*.db
+
+# env
+.env
+
+# claude instructions (local only)
+claude.md
+CLAUDE.md
+
+# OS
+.DS_Store
+Thumbs.db
