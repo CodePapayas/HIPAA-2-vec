@@ -226,3 +226,202 @@ entries:
     maps_to: workforce member
     relationship: hyponym
     notes: Developers with PHI access are workforce members requiring training
+
+  # Software / app vocabulary — dev terms that map to regulatory concepts
+  - term: app
+    maps_to: electronic information system
+    relationship: synonym
+    notes: App in HIPAA context is an electronic information system under sec 164.304
+
+  - term: application
+    maps_to: electronic information system
+    relationship: synonym
+
+  - term: service
+    maps_to: electronic information system
+    relationship: contextual
+    scope:
+      - software
+      - API
+      - microservice
+      - backend
+      - cloud
+
+  - term: site
+    maps_to: electronic information system
+    relationship: contextual
+    scope:
+      - web
+      - portal
+      - patient
+      - provider
+
+  - term: website
+    maps_to: electronic information system
+    relationship: synonym
+
+  - term: platform
+    maps_to: electronic information system
+    relationship: synonym
+
+  - term: microservice
+    maps_to: business associate
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+    notes: A microservice that processes PHI on behalf of a CE is a business associate
+
+  - term: API
+    maps_to: business associate
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+    notes: Exposing or consuming an API that passes PHI triggers BAA requirements
+
+  - term: webhook
+    maps_to: disclosure
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+    notes: Webhooks that push PHI to external endpoints are disclosures
+
+  - term: connector
+    maps_to: business associate
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - integration
+      - data
+
+  - term: integration
+    maps_to: disclosure
+    relationship: synonym
+    notes: Integrating a third-party service that touches PHI = disclosure requiring BAA
+
+  - term: integrate
+    maps_to: disclosure
+    relationship: synonym
+
+  - term: pipeline
+    maps_to: electronic information system
+    relationship: contextual
+    scope:
+      - data
+      - PHI
+      - health
+
+  # Inter-service communication — devs say "speak to", "talk to", "call"
+  - term: speak to
+    maps_to: transmission
+    relationship: synonym
+    notes: '"App speaks to service" = electronic transmission of data; if PHI, triggers § 164.312(e)'
+
+  - term: speak with
+    maps_to: transmission
+    relationship: synonym
+
+  - term: talk to
+    maps_to: transmission
+    relationship: synonym
+
+  - term: talk with
+    maps_to: transmission
+    relationship: synonym
+
+  - term: calls
+    maps_to: transmission
+    relationship: contextual
+    scope:
+      - API
+      - service
+      - endpoint
+      - HTTP
+      - request
+    notes: Service-to-service calls carrying PHI = transmission requiring encryption
+
+  - term: call
+    maps_to: transmission
+    relationship: contextual
+    scope:
+      - API
+      - service
+      - endpoint
+
+  - term: communicate
+    maps_to: transmission
+    relationship: contextual
+    scope:
+      - service
+      - API
+      - system
+      - app
+      - software
+
+  - term: connect
+    maps_to: transmission
+    relationship: contextual
+    scope:
+      - service
+      - API
+      - database
+      - system
+
+  - term: fetch
+    maps_to: transmission
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+
+  - term: push
+    maps_to: disclosure
+    relationship: contextual
+    scope:
+      - data
+      - PHI
+      - health
+      - notification
+
+  - term: pull
+    maps_to: transmission
+    relationship: contextual
+    scope:
+      - data
+      - PHI
+      - health
+
+  - term: sync
+    maps_to: transmission
+    relationship: contextual
+    scope:
+      - data
+      - PHI
+      - health
+      - records
+    notes: Syncing PHI between systems = transmission; each endpoint needs safeguards
+
+  - term: endpoint
+    maps_to: electronic information system
+    relationship: contextual
+    scope:
+      - API
+      - service
+      - HTTP
+
+  - term: third-party service
+    maps_to: business associate
+    relationship: synonym
+
+  - term: external service
+    maps_to: business associate
+    relationship: synonym

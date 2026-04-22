@@ -15,8 +15,10 @@ def main() -> None:
 @main.command()
 def serve() -> None:
     """Run the MCP server over stdio."""
+    from hipaa_mcp.boot import boot_screen
     from hipaa_mcp.server import mcp
 
+    boot_screen(mode="serve")
     mcp.run()
 
 
@@ -24,7 +26,10 @@ def serve() -> None:
 @click.option("--date", "as_of", default=None, help="YYYY-MM-DD date for eCFR snapshot")
 def reindex(as_of: str | None) -> None:
     """Download eCFR XML and rebuild indices."""
+    from hipaa_mcp.boot import boot_screen
     from hipaa_mcp.ingest import reindex as _reindex
+
+    boot_screen(mode="reindex")
 
     parsed_date: date | None = None
     if as_of:
