@@ -87,7 +87,7 @@ entries:
   - term: consent
     maps_to: authorization
     relationship: synonym
-    notes: HIPAA term is "authorization" not "consent" (consent is narrower, used in treatment context)
+    notes: HIPAA uses "authorization"; under 42 CFR Part 2 "consent" is the operative term for disclosure of substance use disorder records — context determines which applies
 
   - term: permission
     maps_to: authorization
@@ -194,11 +194,12 @@ entries:
   # Breach / incident
   - term: breach
     maps_to: breach notification
-    relationship: synonym
+    relationship: hyponym
+    notes: Breach is the event; breach notification is the resulting obligation under § 164.400
 
   - term: data leak
     maps_to: breach notification
-    relationship: synonym
+    relationship: hyponym
 
   - term: incident
     maps_to: breach notification
@@ -425,3 +426,147 @@ entries:
   - term: external service
     maps_to: business associate
     relationship: synonym
+
+  # Storage / persistence
+  - term: store
+    maps_to: electronic protected health information
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+    notes: Storing PHI = ePHI at rest; triggers § 164.312(a) access control and § 164.312(d) encryption addressable spec
+
+  - term: persist
+    maps_to: electronic protected health information
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+
+  - term: cache
+    maps_to: electronic protected health information
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+    notes: Cached PHI is still ePHI; in-memory or Redis caches containing PHI require same safeguards as persistent storage
+
+  - term: backup
+    maps_to: data backup plan
+    relationship: synonym
+    notes: § 164.308(a)(7)(ii)(A) requires retrievable exact copies of ePHI; backup systems are covered
+
+  - term: database
+    maps_to: electronic information system
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+
+  - term: DB
+    maps_to: electronic information system
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+
+  # Cloud / object storage
+  - term: cloud
+    maps_to: business associate
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+      - storage
+    notes: Cloud providers storing or processing PHI are business associates requiring a BAA
+
+  - term: S3
+    maps_to: business associate
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+    notes: S3 buckets containing PHI make AWS a business associate; BAA required
+
+  - term: object storage
+    maps_to: business associate
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - data
+
+  # Export / download / report
+  - term: export
+    maps_to: disclosure
+    relationship: synonym
+    notes: Exporting PHI to a file or external system = disclosure
+
+  - term: download
+    maps_to: disclosure
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+
+  - term: report
+    maps_to: disclosure
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+
+  # Messaging / queues
+  - term: notification
+    maps_to: disclosure
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+    notes: Push notifications carrying PHI (e.g. appointment reminders with identifiers) are disclosures
+
+  - term: queue
+    maps_to: electronic information system
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - patient
+      - data
+
+  - term: message queue
+    maps_to: electronic information system
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - data
+    notes: Message queues (Kafka, SQS, RabbitMQ) carrying PHI are electronic information systems requiring safeguards
+
+  - term: Kafka
+    maps_to: electronic information system
+    relationship: contextual
+    scope:
+      - PHI
+      - health
+      - data
+    notes: Kafka topics carrying PHI require encryption in transit and access controls per § 164.312

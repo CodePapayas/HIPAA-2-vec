@@ -11,9 +11,10 @@ from hipaa_mcp.models import (
     GlossaryEntry,
     Relationship,
     SearchResults,
+    SearchResultsWithProvenance,
     Section,
 )
-from hipaa_mcp.retrieval import get_section_chunks, search
+from hipaa_mcp.retrieval import get_section_chunks, search, search_with_provenance
 
 mcp = FastMCP("hipaa-mcp")
 
@@ -23,7 +24,7 @@ async def search_regulations(query: str, top_k: int = 5) -> SearchResults | Erro
     settings = get_settings()
     try:
         expanded = await rewrite_query(query) if settings.use_llm_for_query_understanding else query
-        expanded = expand_query(expanded, load_glossary())
+        expanded, _ = expand_query(expanded, load_glossary())
         results = search(expanded, top_k=top_k)
         results = results.model_copy(update={"expanded_query": expanded if expanded != query else None})
         return results
@@ -91,6 +92,24 @@ async def list_glossary_terms(filter: str | None = None) -> list[GlossaryEntry]:
         return glossary.entries
     f = filter.lower()
     return [e for e in glossary.entries if f in e.term.lower() or f in e.maps_to.lower()]
+
+
+@mcp.tool()
+async def explain_search(
+    query: str, top_k: int = 5
+) -> SearchResultsWithProvenance | ErrorResponse:
+    settings = get_settings()
+    try:
+        expanded = await rewrite_query(query) if settings.use_llm_for_query_understanding else query
+        expanded, glossary_matches = expand_query(expanded, load_glossary())
+        return search_with_provenance(
+            query=query,
+            glossary_matches=glossary_matches,
+            top_k=top_k,
+            expanded_query=expanded if expanded != query else None,
+        )
+    except Exception as exc:
+        return ErrorResponse(code="EXPLAIN_ERROR", message=str(exc))
 
 
 @mcp.tool()

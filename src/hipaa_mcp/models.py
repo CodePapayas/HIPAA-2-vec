@@ -66,6 +66,29 @@ class Section(BaseModel):
     source_corpus: Literal["hipaa", "part2"]
 
 
+class GlossaryMatch(BaseModel):
+    term: str
+    maps_to: str
+    relationship: Relationship
+    scope_triggered: list[str] | None = None
+    confidence: float  # 0.0–1.0
+
+
+class SearchHitProvenance(BaseModel):
+    chunk: RegulationChunk
+    rrf_score: float
+    vector_score: float | None = None  # cosine similarity normalized to 0-1; None if hit was bm25-only
+    bm25_score: float | None = None    # normalized to 0-1 relative to top BM25 score; None if vector-only
+    matched_via: Literal["vector", "bm25", "hybrid"]
+
+
+class SearchResultsWithProvenance(BaseModel):
+    query: str
+    expanded_query: str | None = None
+    glossary_matches: list[GlossaryMatch]
+    hits: list[SearchHitProvenance]
+
+
 class ErrorResponse(BaseModel):
     code: str
     message: str

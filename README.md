@@ -18,6 +18,7 @@ Built for healthtech developers who need to answer "do I need a BAA for this ven
 |---|---|
 | `search_regulations("do I need a BAA for my analytics vendor?")` | Ranked `§ X.Y` citations with full regulation text |
 | `get_section("§ 164.308(a)(1)")` | Full text of that specific section |
+| `explain_search("why did my microservice query return these results?")` | Same results + full provenance: which glossary terms fired, confidence scores, per-hit vector/BM25 scores |
 | `add_glossary_term / list_glossary_terms / remove_glossary_term` | Tune how your developer vocabulary maps to regulatory terms |
 
 **How search works:** hybrid vector + BM25 retrieval merged with reciprocal rank fusion → your query gets expanded (e.g. "vendor" → "business associate") before hitting the index → results ranked by combined score. No cloud, no OpenAI, no Anthropic. Everything runs on your machine.
@@ -87,7 +88,7 @@ Add this to your MCP config file:
 }
 ```
 
-Restart Claude Desktop. You'll see the 🔨 tools icon — `search_regulations`, `get_section`, and the glossary tools will be available.
+Restart Claude Desktop. You'll see the 🔨 tools icon — `search_regulations`, `get_section`, `explain_search`, and the glossary tools will be available.
 
 ---
 
@@ -147,6 +148,25 @@ HIPAA uses different words than developers do. The glossary bridges that gap at 
 | `hyponym` | One-way only (your term → regulatory term) |
 | `contextual` | Only expand if a scope keyword appears in the query |
 | `anti` | When your term is present, *exclude* the target from expansion |
+
+### Inspecting expansion with `explain_search`
+
+When you want to understand *why* a query returned specific results, use `explain_search` instead of `search_regulations`. It returns the same hits plus:
+
+- **`glossary_matches`** — every glossary entry that fired, with `confidence` (0–1), the relationship type, and which `scope_triggered` words caused a contextual match
+- **`vector_score`** — cosine similarity (0–1) between the query and the chunk
+- **`bm25_score`** — lexical match score normalized to the top BM25 result (0–1)
+- **`rrf_score`** — the final merged rank fusion score
+
+```
+explain_search("does my microservice need a BAA if it processes PHI?")
+→ glossary_matches:
+    "microservice" → "business associate"  [contextual, scope: PHI]  confidence: 0.95
+    "processes"    → "use"                 [synonym, VERB subst.]    confidence: 1.0
+→ hits:
+    § 164.308  vector=0.71  bm25=1.00  rrf=0.032  [hybrid]
+    § 164.314  vector=0.65  bm25=0.84  rrf=0.031  [hybrid]
+```
 
 ### Adding your own mappings
 

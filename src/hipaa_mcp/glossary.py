@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import yaml
 
 from hipaa_mcp.config import get_settings
-from hipaa_mcp.models import Glossary, GlossaryEntry, Relationship
+from hipaa_mcp.models import Glossary, GlossaryEntry, GlossaryMatch, Relationship
 
 if TYPE_CHECKING:
     import spacy as spacy_type
@@ -93,13 +93,30 @@ def _token_pos_map(query: str) -> dict[str, str]:
     return {token.text.lower(): token.pos_ for token in doc}
 
 
-def expand_query(query: str, glossary: Glossary) -> str:
+def _glossary_match_confidence(entry: GlossaryEntry, scope_triggered: list[str]) -> float:
+    match entry.relationship:
+        case Relationship.synonym:
+            return 1.0
+        case Relationship.hyponym:
+            return 0.9
+        case Relationship.contextual:
+            total = len(entry.scope or [])
+            matched = len(scope_triggered)
+            if total == 0 or matched == 0:
+                return 0.5
+            return round(0.5 + (matched / total) * 0.45, 4)
+        case Relationship.anti:
+            return 1.0
+
+
+def expand_query(query: str, glossary: Glossary) -> tuple[str, list[GlossaryMatch]]:
     q_lower = query.lower()
     pos_map = _token_pos_map(query)
 
     result = query
     additions: list[str] = []
     exclusions: list[str] = []
+    matches: list[GlossaryMatch] = []
 
     for entry in glossary.entries:
         term = entry.term.lower()
@@ -113,19 +130,61 @@ def expand_query(query: str, glossary: Glossary) -> str:
         pos = pos_map.get(term)
         if pos == "VERB" and entry.relationship in (Relationship.synonym, Relationship.hyponym):
             result = re.sub(re.escape(entry.term), entry.maps_to, result, flags=re.IGNORECASE)
+            matches.append(
+                GlossaryMatch(
+                    term=entry.term,
+                    maps_to=entry.maps_to,
+                    relationship=entry.relationship,
+                    confidence=_glossary_match_confidence(entry, []),
+                )
+            )
             continue
 
         match entry.relationship:
             case Relationship.synonym:
                 additions.append(entry.maps_to)
+                matches.append(
+                    GlossaryMatch(
+                        term=entry.term,
+                        maps_to=entry.maps_to,
+                        relationship=entry.relationship,
+                        confidence=_glossary_match_confidence(entry, []),
+                    )
+                )
             case Relationship.hyponym:
                 additions.append(entry.maps_to)
+                matches.append(
+                    GlossaryMatch(
+                        term=entry.term,
+                        maps_to=entry.maps_to,
+                        relationship=entry.relationship,
+                        confidence=_glossary_match_confidence(entry, []),
+                    )
+                )
             case Relationship.contextual:
                 scope_words = entry.scope or []
-                if any(s.lower() in q_lower for s in scope_words):
+                triggered = [s for s in scope_words if s.lower() in q_lower]
+                if triggered:
                     additions.append(entry.maps_to)
+                    matches.append(
+                        GlossaryMatch(
+                            term=entry.term,
+                            maps_to=entry.maps_to,
+                            relationship=entry.relationship,
+                            scope_triggered=triggered,
+                            confidence=_glossary_match_confidence(entry, triggered),
+                        )
+                    )
             case Relationship.anti:
                 exclusions.append(entry.maps_to)
+                matches.append(
+                    GlossaryMatch(
+                        term=entry.term,
+                        maps_to=entry.maps_to,
+                        relationship=entry.relationship,
+                        confidence=_glossary_match_confidence(entry, []),
+                    )
+                )
 
     for add in additions:
         if add.lower() not in result.lower():
@@ -133,4 +192,4 @@ def expand_query(query: str, glossary: Glossary) -> str:
     for excl in exclusions:
         result = f"{result} NOT {excl}"
 
-    return result
+    return result, matches
