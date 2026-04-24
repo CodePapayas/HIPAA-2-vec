@@ -22,7 +22,8 @@
       "mcp__hipaa-mcp__list_glossary_terms",
       "mcp__hipaa-mcp__get_section",
       "Bash(python -m spacy download en_core_web_sm)",
-      "mcp__hipaa-mcp__add_glossary_term"
+      "mcp__hipaa-mcp__add_glossary_term",
+      "mcp__hipaa-mcp__explain_search"
     ]
   },
   "enabledMcpjsonServers": [
