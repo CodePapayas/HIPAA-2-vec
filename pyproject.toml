@@ -4,7 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hipaa-mcp"
-version = "0.1.0"
+version = "0.1.1"
+description = "Local-first MCP server for HIPAA & 42 CFR Part 2 — search regulations in plain English, get exact § citations back. No cloud, no interpretation."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "CodePapayas", email = "zach.w.olson@live.com" }]
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0",

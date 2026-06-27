@@ -1,14 +1,22 @@
 # 🏥 hipaa-mcp
 
-> **Ask HIPAA questions in plain English. Get exact citations back. Nothing else.**
+> **Write queries in developer language. Get exact regulatory citations back.**
 
-A local-first MCP server that searches **45 CFR Part 164 (HIPAA)** and **42 CFR Part 2** and returns precise regulatory citations like `§ 164.308(a)(1)(ii)(A)` — not summaries, not interpretations, not vibes.
+A local-first MCP server that searches **45 CFR Part 164 (HIPAA)** and **42 CFR Part 2** and returns precise regulatory citations like `§ 164.308(a)(1)(ii)(A)`.
 
-Built for healthtech developers who need to answer "do I need a BAA for this vendor?" without reading 200 pages of CFR or trusting a Reddit thread.
+HIPAA was written by lawyers. Developers write code. The two vocabularies barely overlap — "vendor" is "business associate", "logging" is "audit controls", "delete" is "destruction". `hipaa-mcp` ships with a living glossary that bridges that gap automatically at query time, so you can ask questions in terms that make sense to you and receive the exact regulation text that applies.
 
 ---
 
-> ⚠️ **This is a reference tool, not a compliance tool.** It retrieves and cites regulation text. It does not tell you what the regulation means for your situation. When in doubt, talk to a lawyer.
+> ### ⚠️ Important disclaimer
+>
+> **`hipaa-mcp` is a research tool for locating verbatim regulatory text.**
+>
+> It retrieves exact passages from HIPAA (45 CFR Part 164) and 42 CFR Part 2. The tool surfaces the text of the law so that you — or your legal counsel — can read and apply it directly. It is designed to return exact language because every compliance determination depends on the precise wording of the relevant regulation.
+>
+> **All results must be independently verified.** Regulations change, and parsing is imperfect. Consult a qualified attorney before making compliance, legal, or architectural decisions based on any regulatory text.
+>
+> This tool is unaffiliated with HHS, OCR, SAMHSA, or any government body.
 
 ---
 
@@ -18,10 +26,10 @@ Built for healthtech developers who need to answer "do I need a BAA for this ven
 |---|---|
 | `search_regulations("do I need a BAA for my analytics vendor?")` | Ranked `§ X.Y` citations with full regulation text |
 | `get_section("§ 164.308(a)(1)")` | Full text of that specific section |
-| `explain_search("why did my microservice query return these results?")` | Same results + full provenance: which glossary terms fired, confidence scores, per-hit vector/BM25 scores |
-| `add_glossary_term / list_glossary_terms / remove_glossary_term` | Tune how your developer vocabulary maps to regulatory terms |
+| `explain_search("why did my microservice query return these results?")` | Results with full provenance: which glossary terms fired, confidence scores, per-hit vector/BM25 scores |
+| `add_glossary_term / list_glossary_terms / remove_glossary_term` | Extend or modify the vocabulary bridge with terms specific to your stack |
 
-**How search works:** hybrid vector + BM25 retrieval merged with reciprocal rank fusion → your query gets expanded (e.g. "vendor" → "business associate") before hitting the index → results ranked by combined score. No cloud, no OpenAI, no Anthropic. Everything runs on your machine.
+**How search works:** hybrid vector + BM25 retrieval merged with reciprocal rank fusion → your query gets expanded (e.g. "vendor" → "business associate") before hitting the index → results ranked by combined score. All processing runs locally.
 
 ---
 
@@ -38,9 +46,13 @@ Built for healthtech developers who need to answer "do I need a BAA for this ven
 ### 1. Install
 
 ```bash
-git clone https://github.com/CodePapayas/hipaa-2-vec
-cd hipaa-2-vec
-uv sync
+pip install hipaa-mcp
+```
+
+Or with `uv`:
+
+```bash
+uv add hipaa-mcp
 ```
 
 ### 2. Download the spaCy language model
@@ -49,7 +61,7 @@ uv sync
 uv run python -m spacy download en_core_web_sm
 ```
 
-> This is used for POS tagging so "building a SaaS" doesn't match regulation text about building facilities.
+> Used for POS tagging to improve query precision — verb forms and noun phrases are weighted appropriately against regulation text.
 
 ### 3. Index the regulations
 
@@ -57,15 +69,39 @@ uv run python -m spacy download en_core_web_sm
 uv run hipaa-mcp reindex
 ```
 
-This downloads the eCFR XML from the federal government, parses it into chunks, and builds a local ChromaDB vector index + BM25 index. Takes a minute or two. Only needs to run once (or when you want fresh regulation text).
+Downloads eCFR XML from the federal government, parses it into chunks, and builds a local ChromaDB vector index + BM25 index. Takes a minute or two. Re-run whenever you want fresh regulation text.
 
-### 4. *(Optional)* Pull the LLM for smarter query rewriting
+### 4. *(Optional)* Set up Ollama for LLM-assisted query rewriting
+
+**What Ollama is:** a tool for running LLMs locally. `hipaa-mcp` uses it to rewrite your plain-English query into better retrieval terms before hitting the index — so a vague question like "do I need to notify someone if my database leaks?" gets expanded into language that actually matches HIPAA text.
+
+**Without Ollama:** glossary-based expansion still runs. Common developer terms ("vendor", "share", "delete") get mapped to their regulatory equivalents automatically. Works well for most queries.
+
+**With Ollama:** the LLM reads your full query in context and rewrites it — catching phrasing the glossary doesn't cover, handling ambiguity, and producing more precise retrieval terms. Recommended if your queries tend to be conversational or domain-specific.
+
+#### Install Ollama
+
+**Mac:**
+```bash
+brew install ollama
+```
+
+**Windows / Linux:** download the installer from [ollama.com](https://ollama.com) and run it.
+
+Verify it's running:
+```bash
+ollama list
+```
+
+#### Pull the model
 
 ```bash
 ollama pull gemma4:e4b
 ```
 
-Without this, glossary-based expansion still runs — you just won't get LLM-assisted query rewriting. Works fine either way.
+This downloads ~3GB. Run it once — the model is cached locally after that.
+
+Ollama runs as a background service on `http://localhost:11434` by default. `hipaa-mcp` connects to it automatically. To use a different endpoint, set `HIPAA_MCP_OLLAMA_URL` in your `.env`.
 
 ---
 
@@ -80,9 +116,8 @@ Add this to your MCP config file:
 {
   "mcpServers": {
     "hipaa-mcp": {
-      "command": "uv",
-      "args": ["run", "hipaa-mcp", "serve"],
-      "cwd": "/path/to/hipaa-2-vec"
+      "command": "hipaa-mcp",
+      "args": ["serve"]
     }
   }
 }
@@ -102,7 +137,7 @@ Restart Claude Desktop. You'll see the 🔨 tools icon — `search_regulations`,
 "What's required for de-identified data?"
 ```
 
-Each returns the matching regulation sections verbatim with their `§` citations. The tool never interprets — just retrieves.
+Each returns the matching regulation sections verbatim with their `§` citations.
 
 ---
 
@@ -123,9 +158,13 @@ hipaa-mcp glossary path               # show where the YAML file lives
 
 ---
 
-## 📖 The glossary: why it exists and how to use it
+## 📖 The glossary
 
-HIPAA uses different words than developers do. The glossary bridges that gap at query time — no re-indexing required when you change it.
+HIPAA text uses a precise, closed vocabulary developed over decades of rulemaking. Searching it with developer terminology — "vendor", "log", "delete", "send" — produces weak results because those words rarely appear verbatim in the regulation.
+
+The glossary solves this at query time. Before your query hits the index, it gets expanded: `vendor` → `business associate`, `logging` → `audit controls`, `delete` → `destruction`. The regulation text stays indexed as-is. Only your query changes, and only for the duration of that search. Updating the glossary takes effect immediately with no reindexing.
+
+~50 mappings ship out of the box. Add your own for terms specific to your stack, your org's internal vocabulary, or the specific regulations you're working with most.
 
 ### Built-in mappings (sample)
 
@@ -147,11 +186,11 @@ HIPAA uses different words than developers do. The glossary bridges that gap at 
 | `synonym` | Expand in both directions |
 | `hyponym` | One-way only (your term → regulatory term) |
 | `contextual` | Only expand if a scope keyword appears in the query |
-| `anti` | When your term is present, *exclude* the target from expansion |
+| `anti` | When your term is present, exclude the target from expansion |
 
 ### Inspecting expansion with `explain_search`
 
-When you want to understand *why* a query returned specific results, use `explain_search` instead of `search_regulations`. It returns the same hits plus:
+`explain_search` returns the same hits as `search_regulations` plus full provenance data:
 
 - **`glossary_matches`** — every glossary entry that fired, with `confidence` (0–1), the relationship type, and which `scope_triggered` words caused a contextual match
 - **`vector_score`** — cosine similarity (0–1) between the query and the chunk
@@ -178,7 +217,7 @@ add_glossary_term(phrase="my term", maps_to="regulatory term", relationship="syn
 hipaa-mcp glossary path   # shows the file location
 ```
 
-The glossary lives in your platform's user data directory — it won't be overwritten by upgrades.
+The glossary lives in your platform's user data directory and is preserved across upgrades.
 
 ---
 
@@ -190,7 +229,7 @@ All env vars are prefixed `HIPAA_MCP_`. You can set them in a `.env` file in the
 |---|---|---|
 | `HIPAA_MCP_OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint |
 | `HIPAA_MCP_LLM_MODEL` | `gemma4:e4b` | Model used for query rewriting |
-| `HIPAA_MCP_USE_LLM_FOR_QUERY_UNDERSTANDING` | `true` | Set `false` to skip LLM rewriting (glossary expansion still runs) |
+| `HIPAA_MCP_USE_LLM_FOR_QUERY_UNDERSTANDING` | `true` | Set `false` to use glossary expansion alone |
 | `HIPAA_MCP_DATA_DIR` | platform user data dir | Where ChromaDB, BM25 index, and glossary are stored |
 | `HIPAA_MCP_TOP_K_DEFAULT` | `5` | Default number of results returned |
 
@@ -208,19 +247,22 @@ HIPAA_MCP_TOP_K_DEFAULT=10
 uv run pytest
 ```
 
-Tests use in-memory ChromaDB and a stub LLM — no real Ollama calls, no network required.
+Tests run fully offline with in-memory ChromaDB and a stub LLM client.
 
 ---
 
-## 🗺️ What's in scope / not in scope
+## 🗺️ Coverage
 
-| ✅ In scope | ❌ Not in scope |
-|---|---|
-| HIPAA 45 CFR Part 164 | Legal interpretation of any kind |
-| 42 CFR Part 2 (substance use records) | Cloud inference of any kind |
-| Plain-English → citation search | A web UI |
-| Local-only, air-gappable | Authentication |
-| Glossary-tunable query expansion | Regs beyond HIPAA + Part 2 |
+Regulations indexed:
+
+- HIPAA — 45 CFR Part 164
+- Substance use records — 42 CFR Part 2
+
+Design boundaries:
+
+- All inference runs locally via Ollama
+- Glossary expansion and retrieval require zero network access after initial index build
+- Query logs are off by default; if enabled, output goes to a local file only
 
 ---
 
@@ -230,15 +272,12 @@ Tests use in-memory ChromaDB and a stub LLM — no real Ollama calls, no network
 
 ---
 
-## 🗒️ TODO
+## 📄 License
 
-- **Glossary expansion preview during reindex** — while `hipaa-mcp reindex` runs, sample ~1 in 5 glossary mappings and print them as they're applied, e.g.:
+MIT License — Copyright (c) 2026 CodePapayas
 
-  ```
-  expanding  "vendor"       →  "business associate"
-  expanding  "share"        →  "disclosure"
-  expanding  "delete"       →  "destruction"
-  ...
-  ```
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
-  Goal: visual confirmation the glossary is wired up correctly + teaches developers the regulatory vocabulary while they wait. Not all terms — just a representative sample, whatever looks good in the terminal.
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+**The software is provided "as is", without warranty of any kind, express or implied.** The authors are not responsible for any compliance decisions made based on output from this tool. See [LICENSE](./LICENSE) for the full text.
