@@ -1,10 +1,16 @@
+# Seed glossary: everyday developer phrasing → the vocabulary the CFR uses.
+#
+# `notes` are user-facing (list_glossary_terms returns them over MCP, and
+# `hipaa-mcp glossary list` prints them). They explain the vocabulary mapping
+# and point at where a term is defined. They never state what a regulation
+# requires, permits, or means — read the cited text for that.
 version: 1
 entries:
   # Third-party / vendor relationships
   - term: vendor
     maps_to: business associate
     relationship: synonym
-    notes: Any vendor handling PHI on your behalf is a BA under HIPAA
+    notes: Developers say "vendor"; the regulations say "business associate" — defined at § 160.103
 
   - term: subprocessor
     maps_to: business associate
@@ -25,12 +31,12 @@ entries:
   - term: partner
     maps_to: business associate
     relationship: synonym
-    notes: Only when the partner handles PHI
+    notes: Expands toward "business associate" — defined at § 160.103
 
   - term: SaaS
     maps_to: business associate
     relationship: synonym
-    notes: A SaaS tool processing PHI needs a BAA
+    notes: Developers say "SaaS"; the regulations say "business associate" — defined at § 160.103
 
   - term: BAA
     maps_to: business associate agreement
@@ -65,7 +71,7 @@ entries:
   - term: delete
     maps_to: destruction
     relationship: synonym
-    notes: HIPAA uses "destruction" not "deletion"
+    notes: Developers say "delete"; the regulations say "destruction" — see § 164.310(d)(2)(i)
 
   - term: remove
     maps_to: destruction
@@ -87,7 +93,7 @@ entries:
   - term: consent
     maps_to: authorization
     relationship: synonym
-    notes: HIPAA uses "authorization"; under 42 CFR Part 2 "consent" is the operative term for disclosure of substance use disorder records — context determines which applies
+    notes: 45 CFR uses "authorization" (§ 164.508); 42 CFR Part 2 uses "consent" (42 CFR § 2.31) — both spellings are worth searching
 
   - term: permission
     maps_to: authorization
@@ -117,12 +123,12 @@ entries:
   - term: de-identified
     maps_to: protected health information
     relationship: anti
-    notes: De-identified data is NOT PHI per § 164.514
+    notes: Signals the de-identification vocabulary of § 164.514 rather than the PHI vocabulary of § 160.103
 
   - term: anonymized
     maps_to: protected health information
     relationship: anti
-    notes: If properly anonymized under Safe Harbor or Expert Determination, not PHI
+    notes: Developers say "anonymized"; the corresponding regulatory vocabulary is de-identification — § 164.514(b)
 
   - term: aggregated
     maps_to: protected health information
@@ -130,13 +136,13 @@ entries:
     scope:
       - de-identified
       - aggregate
-    notes: Aggregate stats without identifiers are not PHI
+    notes: Points at the de-identification vocabulary of § 164.514 rather than the PHI vocabulary of § 160.103
 
   # Logging / audit
   - term: logging
     maps_to: audit controls
     relationship: synonym
-    notes: HIPAA § 164.312(b) requires audit controls / activity logs
+    notes: Developers say "logging"; the regulations say "audit controls" — the term appears at § 164.312(b)
 
   - term: audit log
     maps_to: audit controls
@@ -195,7 +201,7 @@ entries:
   - term: breach
     maps_to: breach notification
     relationship: hyponym
-    notes: Breach is the event; breach notification is the resulting obligation under § 164.400
+    notes: '"Breach" is defined at § 164.402; "breach notification" names subpart D, § 164.400 onward'
 
   - term: data leak
     maps_to: breach notification
@@ -226,13 +232,13 @@ entries:
   - term: developer
     maps_to: workforce member
     relationship: hyponym
-    notes: Developers with PHI access are workforce members requiring training
+    notes: Developers say "developer"; the regulations say "workforce member" — defined at § 160.103
 
   # Software / app vocabulary — dev terms that map to regulatory concepts
   - term: app
     maps_to: electronic information system
     relationship: synonym
-    notes: App in HIPAA context is an electronic information system under sec 164.304
+    notes: Developers say "app"; the regulations say "information system" — defined at § 164.304
 
   - term: application
     maps_to: electronic information system
@@ -272,7 +278,7 @@ entries:
       - PHI
       - health
       - patient
-    notes: A microservice that processes PHI on behalf of a CE is a business associate
+    notes: Developers say "microservice"; the nearest regulatory term is "business associate" — defined at § 160.103
 
   - term: API
     maps_to: business associate
@@ -282,7 +288,7 @@ entries:
       - health
       - patient
       - data
-    notes: Exposing or consuming an API that passes PHI triggers BAA requirements
+    notes: Developers say "API"; the nearest regulatory term is "business associate" — defined at § 160.103
 
   - term: webhook
     maps_to: disclosure
@@ -291,7 +297,7 @@ entries:
       - PHI
       - health
       - patient
-    notes: Webhooks that push PHI to external endpoints are disclosures
+    notes: Developers say "webhook"; the regulations say "disclosure" — defined at § 160.103
 
   - term: connector
     maps_to: business associate
@@ -305,7 +311,7 @@ entries:
   - term: integration
     maps_to: disclosure
     relationship: synonym
-    notes: Integrating a third-party service that touches PHI = disclosure requiring BAA
+    notes: Developers say "integration"; the regulations say "disclosure" — defined at § 160.103
 
   - term: integrate
     maps_to: disclosure
@@ -323,7 +329,7 @@ entries:
   - term: speak to
     maps_to: transmission
     relationship: synonym
-    notes: '"App speaks to service" = electronic transmission of data; if PHI, triggers § 164.312(e)'
+    notes: Developers say "speaks to"; the regulations say "transmission" — see § 164.312(e)
 
   - term: speak with
     maps_to: transmission
@@ -346,7 +352,7 @@ entries:
       - endpoint
       - HTTP
       - request
-    notes: Service-to-service calls carrying PHI = transmission requiring encryption
+    notes: Developers say "calls"; the regulations say "transmission" — see § 164.312(e)
 
   - term: call
     maps_to: transmission
@@ -409,7 +415,7 @@ entries:
       - PHI
       - health
       - records
-    notes: Syncing PHI between systems = transmission; each endpoint needs safeguards
+    notes: Developers say "sync"; the regulations say "transmission" — see § 164.312(e)
 
   - term: endpoint
     maps_to: electronic information system
@@ -436,7 +442,7 @@ entries:
       - health
       - patient
       - data
-    notes: Storing PHI = ePHI at rest; triggers § 164.312(a) access control and § 164.312(d) encryption addressable spec
+    notes: Developers say "store"; the regulations say "electronic protected health information" — defined at § 160.103
 
   - term: persist
     maps_to: electronic protected health information
@@ -455,12 +461,12 @@ entries:
       - health
       - patient
       - data
-    notes: Cached PHI is still ePHI; in-memory or Redis caches containing PHI require same safeguards as persistent storage
+    notes: Developers say "cache"; the regulations say "electronic protected health information" — defined at § 160.103
 
   - term: backup
     maps_to: data backup plan
     relationship: synonym
-    notes: § 164.308(a)(7)(ii)(A) requires retrievable exact copies of ePHI; backup systems are covered
+    notes: Developers say "backup"; the regulations say "data backup plan" — the term appears at § 164.308(a)(7)(ii)(A)
 
   - term: database
     maps_to: electronic information system
@@ -490,7 +496,7 @@ entries:
       - patient
       - data
       - storage
-    notes: Cloud providers storing or processing PHI are business associates requiring a BAA
+    notes: Developers say "cloud"; the nearest regulatory term is "business associate" — defined at § 160.103
 
   - term: S3
     maps_to: business associate
@@ -500,7 +506,7 @@ entries:
       - health
       - patient
       - data
-    notes: S3 buckets containing PHI make AWS a business associate; BAA required
+    notes: Developers say "S3"; the nearest regulatory term is "business associate" — defined at § 160.103
 
   - term: object storage
     maps_to: business associate
@@ -514,7 +520,7 @@ entries:
   - term: export
     maps_to: disclosure
     relationship: synonym
-    notes: Exporting PHI to a file or external system = disclosure
+    notes: Developers say "export"; the regulations say "disclosure" — defined at § 160.103
 
   - term: download
     maps_to: disclosure
@@ -542,7 +548,7 @@ entries:
       - PHI
       - health
       - patient
-    notes: Push notifications carrying PHI (e.g. appointment reminders with identifiers) are disclosures
+    notes: Developers say "notification"; the regulations say "disclosure" — defined at § 160.103
 
   - term: queue
     maps_to: electronic information system
@@ -560,7 +566,7 @@ entries:
       - PHI
       - health
       - data
-    notes: Message queues (Kafka, SQS, RabbitMQ) carrying PHI are electronic information systems requiring safeguards
+    notes: Developers say "message queue"; the regulations say "information system" — defined at § 164.304
 
   - term: Kafka
     maps_to: electronic information system
@@ -569,4 +575,4 @@ entries:
       - PHI
       - health
       - data
-    notes: Kafka topics carrying PHI require encryption in transit and access controls per § 164.312
+    notes: Developers say "Kafka"; the regulations say "information system" — defined at § 164.304

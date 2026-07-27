@@ -21,19 +21,35 @@ mcp = FastMCP("hipaa-mcp")
 
 @mcp.tool()
 async def search_regulations(query: str, top_k: int = 5) -> SearchResults | ErrorResponse:
+    """Search HIPAA (45 CFR) and 42 CFR Part 2 for passages matching a plain-English question.
+
+    Returns matching regulation passages with their exact citations. Passage
+    text is verbatim regulatory text; this tool does not interpret, summarize,
+    or advise. Quote the passage and cite the section — do not restate what the
+    regulation "means".
+    """
     settings = get_settings()
     try:
-        expanded = await rewrite_query(query) if settings.use_llm_for_query_understanding else query
-        expanded, _ = expand_query(expanded, load_glossary())
-        results = search(expanded, top_k=top_k)
-        results = results.model_copy(update={"expanded_query": expanded if expanded != query else None})
-        return results
+        question = await rewrite_query(query) if settings.use_llm_for_query_understanding else query
+        expanded, _ = expand_query(question, load_glossary())
+        results = search(expanded.query, top_k=top_k, exclusions=expanded.exclusions)
+        display = expanded.display()
+        return results.model_copy(
+            update={"expanded_query": display if display != query else None}
+        )
     except Exception as exc:
         return ErrorResponse(code="SEARCH_ERROR", message=str(exc))
 
 
 @mcp.tool()
 async def get_section(citation: str) -> Section | ErrorResponse:
+    """Fetch the verbatim text of one CFR section or subparagraph by citation.
+
+    Accepts citations such as `164.308`, `§ 164.308(a)(1)(ii)(A)`, or
+    `42 CFR § 2.11(b)`. When subdivisions are given, only that subparagraph's
+    text is returned. The text is reproduced as published; this tool does not
+    interpret it.
+    """
     try:
         parsed = parse(citation)
     except CitationParseError as exc:
@@ -47,7 +63,7 @@ async def get_section(citation: str) -> Section | ErrorResponse:
     if not chunks:
         return ErrorResponse(
             code="NOT_FOUND",
-            message=f"No chunks found for {parsed.format()}",
+            message=f"No indexed text found for {parsed.format()}",
         )
 
     full_text = "\n\n".join(c.text for c in chunks)
@@ -67,6 +83,13 @@ async def add_glossary_term(
     relationship: str = "synonym",
     notes: str | None = None,
 ) -> GlossaryEntry | ErrorResponse:
+    """Teach the search layer that a developer phrase maps to regulatory vocabulary.
+
+    `relationship` is one of: synonym (interchangeable), hyponym (phrase is a
+    narrower case of the target), contextual (expand only when scope words are
+    present), anti (the phrase signals the target should be excluded). Notes are
+    vocabulary rationale only, never statements about what the law requires.
+    """
     try:
         rel = Relationship(relationship)
     except ValueError:
@@ -87,6 +110,11 @@ async def add_glossary_term(
 
 @mcp.tool()
 async def list_glossary_terms(filter: str | None = None) -> list[GlossaryEntry]:
+    """List the active vocabulary mappings, optionally filtered by substring.
+
+    Entries map everyday developer phrasing to the terms the regulations use.
+    They are search aids, not legal definitions.
+    """
     glossary = load_glossary()
     if filter is None:
         return glossary.entries
@@ -98,15 +126,25 @@ async def list_glossary_terms(filter: str | None = None) -> list[GlossaryEntry]:
 async def explain_search(
     query: str, top_k: int = 5
 ) -> SearchResultsWithProvenance | ErrorResponse:
+    """Run a search and show why each passage was retrieved.
+
+    Reports the glossary terms that expanded the query and, per hit, the vector
+    similarity, the normalized BM25 score, and the fused rank. Same retrieval as
+    `search_regulations`; the passages are verbatim regulatory text and are not
+    interpreted.
+    """
     settings = get_settings()
     try:
-        expanded = await rewrite_query(query) if settings.use_llm_for_query_understanding else query
-        expanded, glossary_matches = expand_query(expanded, load_glossary())
+        question = await rewrite_query(query) if settings.use_llm_for_query_understanding else query
+        expanded, glossary_matches = expand_query(question, load_glossary())
+        display = expanded.display()
         return search_with_provenance(
             query=query,
             glossary_matches=glossary_matches,
             top_k=top_k,
-            expanded_query=expanded if expanded != query else None,
+            expanded_query=display if display != query else None,
+            retrieval_query=expanded.query,
+            exclusions=expanded.exclusions,
         )
     except Exception as exc:
         return ErrorResponse(code="EXPLAIN_ERROR", message=str(exc))
@@ -114,6 +152,7 @@ async def explain_search(
 
 @mcp.tool()
 async def remove_glossary_term(phrase: str) -> bool | ErrorResponse:
+    """Remove a vocabulary mapping by its phrase. Returns true when one was removed."""
     glossary = load_glossary()
     before = len(glossary.entries)
     glossary.entries = [e for e in glossary.entries if e.term.lower() != phrase.lower()]

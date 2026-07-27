@@ -2,7 +2,7 @@
 
 > **Write queries in developer language. Get exact regulatory citations back.**
 
-A local-first MCP server that searches **45 CFR Part 164 (HIPAA)** and **42 CFR Part 2** and returns precise regulatory citations like `§ 164.308(a)(1)(ii)(A)`.
+A local-first MCP server that searches **45 CFR Parts 160 and 164 (HIPAA)** and **42 CFR Part 2** and returns precise regulatory citations like `§ 164.308(a)(1)(ii)(A)`.
 
 HIPAA was written by lawyers. Developers write code. The two vocabularies barely overlap — "vendor" is "business associate", "logging" is "audit controls", "delete" is "destruction". `hipaa-mcp` ships with a living glossary that bridges that gap automatically at query time, so you can ask questions in terms that make sense to you and receive the exact regulation text that applies.
 
@@ -12,7 +12,7 @@ HIPAA was written by lawyers. Developers write code. The two vocabularies barely
 >
 > **`hipaa-mcp` is a research tool for locating verbatim regulatory text.**
 >
-> It retrieves exact passages from HIPAA (45 CFR Part 164) and 42 CFR Part 2. The tool surfaces the text of the law so that you — or your legal counsel — can read and apply it directly. It is designed to return exact language because every compliance determination depends on the precise wording of the relevant regulation.
+> It retrieves exact passages from HIPAA (45 CFR Parts 160 and 164) and 42 CFR Part 2. The tool surfaces the text of the law so that you — or your legal counsel — can read and apply it directly. It is designed to return exact language because every compliance determination depends on the precise wording of the relevant regulation.
 >
 > **All results must be independently verified.** Regulations change, and parsing is imperfect. Consult a qualified attorney before making compliance, legal, or architectural decisions based on any regulatory text.
 >
@@ -55,23 +55,19 @@ Or with `uv`:
 uv add hipaa-mcp
 ```
 
-### 2. Download the spaCy language model
-
-```bash
-uv run python -m spacy download en_core_web_sm
-```
-
-> Used for POS tagging to improve query precision — verb forms and noun phrases are weighted appropriately against regulation text.
-
-### 3. Index the regulations
+### 2. Index the regulations
 
 ```bash
 uv run hipaa-mcp reindex
 ```
 
-Downloads eCFR XML from the federal government, parses it into chunks, and builds a local ChromaDB vector index + BM25 index. Takes a minute or two. Re-run whenever you want fresh regulation text.
+Downloads eCFR XML from the federal government, parses it into subparagraph chunks, and builds a local ChromaDB vector index + BM25 index. Takes a minute or two. Re-run whenever you want fresh regulation text.
 
-### 4. *(Optional)* Set up Ollama for LLM-assisted query rewriting
+> **First run only:** ChromaDB downloads its embedding model (~80 MB) during this step. That is the one time the indexing path reaches the network for anything other than eCFR. Afterwards, queries run entirely offline.
+
+> **Upgrading from an earlier version:** the on-disk index format changed (cosine-space vectors, JSON-backed BM25). If a search reports a stale or missing index, run `hipaa-mcp reindex` once to rebuild.
+
+### 3. *(Optional)* Set up Ollama for LLM-assisted query rewriting
 
 **What Ollama is:** a tool for running LLMs locally. `hipaa-mcp` uses it to rewrite your plain-English query into better retrieval terms before hitting the index — so a vague question like "do I need to notify someone if my database leaks?" gets expanded into language that actually matches HIPAA text.
 
@@ -130,14 +126,14 @@ Restart Claude Desktop. You'll see the 🔨 tools icon — `search_regulations`,
 ## 💬 Example queries
 
 ```
-"Do I need a BAA with my logging vendor?"
-"What are the minimum necessary standards?"
-"Can I share patient data with a data analytics subprocessor?"
-"What does HIPAA say about breach notification timelines?"
-"What's required for de-identified data?"
+"business associate contract requirements for a logging vendor"
+"minimum necessary standard"
+"disclosure of patient data to a data analytics subprocessor"
+"breach notification timelines"
+"de-identification of protected health information"
 ```
 
-Each returns the matching regulation sections verbatim with their `§` citations.
+Each returns the matching regulation sections verbatim with their `§` citations. The tool locates and quotes text; reading and applying it is your job (or your counsel's).
 
 ---
 
@@ -146,6 +142,8 @@ Each returns the matching regulation sections verbatim with their `§` citations
 ```bash
 # Start MCP server over stdio (used by Claude Desktop / MCP clients)
 hipaa-mcp serve
+hipaa-mcp serve --fancy                # animated boot screen (stderr); off by default
+                                       # so the MCP handshake is not delayed
 
 # Rebuild the index (re-downloads eCFR XML, rebuilds ChromaDB + BM25)
 hipaa-mcp reindex
@@ -168,7 +166,7 @@ The glossary solves this at query time. Before your query hits the index, it get
 
 ### Built-in mappings (sample)
 
-| What you say | What HIPAA says |
+| What you say | What the CFR says |
 |---|---|
 | SaaS, vendor, contractor | business associate |
 | share, send, transmit | disclosure |
@@ -177,7 +175,7 @@ The glossary solves this at query time. Before your query hits the index, it get
 | logging, audit log | audit controls |
 | least privilege | minimum necessary |
 | breach, data leak | breach notification |
-| de-identified | *(anti)* not PHI |
+| de-identified | *(anti)* protected health information |
 
 ### Relationship types
 
@@ -186,7 +184,7 @@ The glossary solves this at query time. Before your query hits the index, it get
 | `synonym` | Expand in both directions |
 | `hyponym` | One-way only (your term → regulatory term) |
 | `contextual` | Only expand if a scope keyword appears in the query |
-| `anti` | When your term is present, exclude the target from expansion |
+| `anti` | When your term is present, drop hits containing the target term |
 
 ### Inspecting expansion with `explain_search`
 
@@ -201,7 +199,7 @@ The glossary solves this at query time. Before your query hits the index, it get
 explain_search("does my microservice need a BAA if it processes PHI?")
 → glossary_matches:
     "microservice" → "business associate"  [contextual, scope: PHI]  confidence: 0.95
-    "processes"    → "use"                 [synonym, VERB subst.]    confidence: 1.0
+    "BAA"          → "business associate agreement"  [synonym]       confidence: 1.0
 → hits:
     § 164.308  vector=0.71  bm25=1.00  rrf=0.032  [hybrid]
     § 164.314  vector=0.65  bm25=0.84  rrf=0.031  [hybrid]
@@ -255,7 +253,8 @@ Tests run fully offline with in-memory ChromaDB and a stub LLM client.
 
 Regulations indexed:
 
-- HIPAA — 45 CFR Part 164
+- HIPAA definitions — 45 CFR Part 160 (where *business associate* and *covered entity* are defined)
+- HIPAA privacy & security — 45 CFR Part 164
 - Substance use records — 42 CFR Part 2
 
 Design boundaries:
@@ -268,7 +267,7 @@ Design boundaries:
 
 ## 📦 Stack
 
-`Python 3.12` · `FastMCP` · `ChromaDB` · `rank_bm25` · `Pydantic v2` · `spaCy` · `lxml` · `Ollama (Gemma 4 E4B)` · `uv`
+`Python 3.12` · `FastMCP` · `ChromaDB` · `rank_bm25` · `Pydantic v2` · `lxml` · `Ollama (Gemma 4 E4B)` · `uv`
 
 ---
 

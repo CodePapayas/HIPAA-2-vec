@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
+from unittest.mock import AsyncMock, patch
+
+import httpx
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from hipaa_mcp.models import (
     Citation,
     ErrorResponse,
+    Glossary,
     GlossaryEntry,
     RegulationChunk,
     Relationship,
@@ -96,6 +100,138 @@ class TestGetSection:
             result = await get_section("164.308")
         assert isinstance(result, Section)
         assert "second paragraph" in result.full_text
+
+
+@pytest.mark.asyncio
+class TestSearchExclusions:
+    async def test_anti_entry_exclusions_reach_retrieval(self) -> None:
+        """The excluded term must be filtered, never appended to the search string."""
+        from hipaa_mcp.models import Glossary
+
+        g = Glossary(
+            entries=[
+                GlossaryEntry(
+                    term="de-identified",
+                    maps_to="not PHI",
+                    relationship=Relationship.anti,
+                )
+            ],
+            version=1,
+        )
+        captured: dict[str, object] = {}
+
+        def _fake_search(query: str, top_k: int = 5, exclusions: list[str] | None = None):
+            captured["query"] = query
+            captured["exclusions"] = exclusions
+            return _fake_results(query)
+
+        with (
+            patch("hipaa_mcp.server.rewrite_query", new_callable=AsyncMock, return_value="de-identified data"),
+            patch("hipaa_mcp.server.load_glossary", return_value=g),
+            patch("hipaa_mcp.server.search", _fake_search),
+        ):
+            from hipaa_mcp.server import search_regulations
+            result = await search_regulations("de-identified data")
+
+        assert isinstance(result, SearchResults)
+        assert captured["exclusions"] == ["not PHI"]
+        assert "not PHI" not in str(captured["query"])
+        assert "NOT" not in str(captured["query"])
+
+    async def test_expanded_query_display_keeps_operators(self) -> None:
+        from hipaa_mcp.models import Glossary
+
+        g = Glossary(
+            entries=[
+                GlossaryEntry(
+                    term="vendor",
+                    maps_to="business associate",
+                    relationship=Relationship.synonym,
+                )
+            ],
+            version=1,
+        )
+        with (
+            patch("hipaa_mcp.server.rewrite_query", new_callable=AsyncMock, return_value="vendor contract"),
+            patch("hipaa_mcp.server.load_glossary", return_value=g),
+            patch("hipaa_mcp.server.search", return_value=_fake_results("vendor contract")),
+        ):
+            from hipaa_mcp.server import search_regulations
+            result = await search_regulations("vendor contract")
+
+        assert isinstance(result, SearchResults)
+        assert result.expanded_query == "vendor contract OR business associate"
+
+
+@pytest.mark.asyncio
+class TestLLMDegradation:
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            httpx.ReadTimeout("timed out"),
+            httpx.ConnectError("refused"),
+            httpx.HTTPStatusError(
+                "404",
+                request=httpx.Request("POST", "http://localhost:11434/api/generate"),
+                response=httpx.Response(404),
+            ),
+            json.JSONDecodeError("bad json", "", 0),
+        ],
+    )
+    async def test_llm_failure_falls_back_to_original_question(self, exc: Exception) -> None:
+        """Retrieval must survive a dead Ollama — the LLM is an optional layer."""
+        from hipaa_mcp.llm import BaseLLMClient, rewrite_query
+
+        class Failing(BaseLLMClient):
+            async def complete(self, prompt: str) -> str:
+                raise exc
+
+        with patch("hipaa_mcp.llm.get_settings") as mock_settings:
+            mock_settings.return_value.use_llm_for_query_understanding = True
+            result = await rewrite_query("do I need a BAA?", client=Failing())
+
+        assert result == "do I need a BAA?"
+
+    async def test_search_still_returns_hits_when_llm_dies(self) -> None:
+        with (
+            patch(
+                "hipaa_mcp.server.rewrite_query",
+                new_callable=AsyncMock,
+                side_effect=lambda q: q,
+            ),
+            patch("hipaa_mcp.server.load_glossary", return_value=Glossary(entries=[], version=1)),
+            patch("hipaa_mcp.server.search", return_value=_fake_results("q")),
+        ):
+            from hipaa_mcp.server import search_regulations
+            result = await search_regulations("q")
+        assert isinstance(result, SearchResults)
+        assert len(result.hits) == 1
+
+
+@pytest.mark.asyncio
+class TestGetSectionSubdivisions:
+    async def test_subdivision_text_only(self) -> None:
+        sub = RegulationChunk(
+            chunk_id="sec_164.312_a_1",
+            citation=Citation(title=45, part=164, section=312, subdivisions=["a", "1"]),
+            heading="Technical safeguards",
+            text="Standard: Access control.",
+            source_corpus="hipaa",
+        )
+        with patch("hipaa_mcp.server.get_section_chunks", return_value=[sub]):
+            from hipaa_mcp.server import get_section
+            result = await get_section("164.312(a)(1)")
+        assert isinstance(result, Section)
+        assert result.citation.subdivisions == ["a", "1"]
+        assert result.full_text == "Standard: Access control."
+
+    async def test_bogus_subdivision_returns_not_found(self) -> None:
+        with patch("hipaa_mcp.server.get_section_chunks", return_value=[]):
+            from hipaa_mcp.server import get_section
+            result = await get_section("164.312(z)(9)")
+        assert isinstance(result, ErrorResponse)
+        assert result.code == "NOT_FOUND"
+        assert "§ 164.312(z)(9)" in result.message
 
 
 @pytest.mark.asyncio

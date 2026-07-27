@@ -12,10 +12,12 @@ build/
 .mypy_cache/
 .pytest_cache/
 
-# user data (chromadb, bm25 index, user glossary)
-data/chroma/
-data/bm25_index.pkl
-data/user_glossary.yaml
+# user data (chromadb, bm25 index, user glossary) — lives in the
+# platformdirs user data dir, never in the repo
+chroma/
+bm25_index.json
+bm25_index.pkl
+user_glossary.yaml
 *.db
 
 # env

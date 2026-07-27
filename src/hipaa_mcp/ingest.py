@@ -1,20 +1,28 @@
 from __future__ import annotations
 
-import pickle
+import json
 from datetime import date
 
+import click
 import httpx
 from rank_bm25 import BM25Okapi
 
 from hipaa_mcp.chunking import SourceCorpus, parse_ecfr_xml
-from hipaa_mcp.config import get_settings
+from hipaa_mcp.config import INDEX_FORMAT, get_settings
 from hipaa_mcp.models import RegulationChunk
 
 ECFR_BASE = "https://www.ecfr.gov/api/versioner/v1/full/{date}/title-{title}.xml"
 ECFR_TITLES = "https://www.ecfr.gov/api/versioner/v1/titles"
 
 # (title, part, corpus_label)
+#
+# Part 160 carries the definitions the rest of HIPAA leans on — "business
+# associate" and "covered entity" are defined at § 160.103, not in Part 164 —
+# so the flagship "do I need a BAA?" question is unanswerable without it.
+# Part 162 (transactions and code sets) is left out: it is EDI format
+# specification, not a source of the vocabulary developers ask about.
 CORPORA: list[tuple[int, int, SourceCorpus]] = [
+    (45, 160, "hipaa"),
     (45, 164, "hipaa"),
     (42, 2, "part2"),
 ]
@@ -40,9 +48,10 @@ def _resolve_date(title: int, requested: date, client: httpx.Client) -> date:
     latest = _latest_available_date(title, client)
     if requested <= latest:
         return requested
-    print(
+    click.echo(
         f"Warning: requested {requested}, but Title {title} only available through "
-        f"{latest}. Using {latest}."
+        f"{latest}. Using {latest}.",
+        err=True,
     )
     return latest
 
@@ -65,8 +74,20 @@ def download_xml(title: int, as_of: date, client: httpx.Client | None = None) ->
         return _fetch(c)
 
 
-def _filter_by_part(chunks: list[RegulationChunk], part: int) -> list[RegulationChunk]:
-    return [c for c in chunks if c.citation.part == part]
+def _filter_by_part(
+    chunks: list[RegulationChunk], part: int, corpus: SourceCorpus
+) -> list[RegulationChunk]:
+    """Select one part's chunks and stamp the corpus label.
+
+    Labelling happens here rather than at parse time: one CFR title can feed
+    more than one corpus, and labelling the whole parsed title with the first
+    matching entry's label would silently mislabel every other part.
+    """
+    return [
+        c.model_copy(update={"source_corpus": corpus})
+        for c in chunks
+        if c.citation.part == part
+    ]
 
 
 def build_indices(chunks: list[RegulationChunk]) -> None:
@@ -81,7 +102,13 @@ def build_indices(chunks: list[RegulationChunk]) -> None:
         client.delete_collection("regulations")
     except Exception:
         pass
-    collection = client.create_collection("regulations")
+    # Cosine space is required: retrieval maps distance → similarity assuming
+    # a bounded [0, 2] cosine distance. Chroma's default (l2) is unbounded and
+    # would make every reported vector score meaningless.
+    collection = client.create_collection(
+        "regulations",
+        metadata={"hnsw:space": "cosine", "index_format": INDEX_FORMAT},
+    )
 
     ids = [c.chunk_id for c in chunks]
     documents = [c.text for c in chunks]
@@ -106,10 +133,31 @@ def build_indices(chunks: list[RegulationChunk]) -> None:
             metadatas=metadatas[i : i + batch],
         )
 
-    tokenized = [doc.lower().split() for doc in documents]
-    bm25 = BM25Okapi(tokenized)
-    with open(settings.bm25_index_path, "wb") as f:
-        pickle.dump({"bm25": bm25, "chunks": chunks}, f)
+    write_bm25_index(chunks)
+
+    from hipaa_mcp.retrieval import reset_caches
+
+    reset_caches()
+
+
+def write_bm25_index(chunks: list[RegulationChunk]) -> None:
+    """Persist the lexical index as JSON.
+
+    Tokens plus chunk data, not a pickled BM25Okapi: unpickling a file from the
+    user data directory would execute whatever is in it. BM25Okapi is rebuilt
+    from the tokens on load, which is cheap at this corpus size.
+    """
+    settings = get_settings()
+    settings.bm25_index_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "index_format": INDEX_FORMAT,
+        "tokens": [c.text.lower().split() for c in chunks],
+        "chunks": [c.model_dump(mode="json") for c in chunks],
+    }
+    settings.bm25_index_path.write_text(json.dumps(payload))
+    # Constructed here purely to fail loudly at index time if the corpus is
+    # degenerate, rather than at first query.
+    BM25Okapi(payload["tokens"] or [[""]])
 
 
 def reindex(as_of: date | None = None) -> None:
@@ -123,16 +171,14 @@ def reindex(as_of: date | None = None) -> None:
         for title, part, corpus in CORPORA:
             if title not in parsed_by_title:
                 effective = _resolve_date(title, as_of, client)
-                print(f"Downloading Title {title} XML for {effective}...")
+                click.echo(f"Downloading Title {title} XML for {effective}...", err=True)
                 url = _ecfr_url(title, effective)
                 resp = client.get(url, timeout=120)
                 resp.raise_for_status()
-                xml_bytes = resp.content
-                parsed_by_title[title] = parse_ecfr_xml(xml_bytes, corpus)
+                parsed_by_title[title] = parse_ecfr_xml(resp.content)
 
-            part_chunks = _filter_by_part(parsed_by_title[title], part)
-            all_chunks.extend(part_chunks)
+            all_chunks.extend(_filter_by_part(parsed_by_title[title], part, corpus))
 
-    print(f"Indexing {len(all_chunks)} chunks...")
+    click.echo(f"Indexing {len(all_chunks)} chunks...", err=True)
     build_indices(all_chunks)
-    print("Done.")
+    click.echo("Done.", err=True)

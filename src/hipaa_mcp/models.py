@@ -33,10 +33,38 @@ class Citation(BaseModel):
     subdivisions: list[str] = Field(default_factory=list)
 
     def format(self) -> str:
-        # Title 42 needs explicit CFR prefix to distinguish from title 45
-        prefix = f"§ {self.title} CFR " if self.title != 45 else "§ "
+        # Standard CFR style: the section mark follows the title/CFR designation.
+        # Title 45 is the default context, so its designation is elided.
         subs = "".join(f"({s})" for s in self.subdivisions)
-        return f"{prefix}{self.part}.{self.section}{subs}"
+        body = f"{self.part}.{self.section}{subs}"
+        if self.title == 45:
+            return f"§ {body}"
+        return f"{self.title} CFR § {body}"
+
+
+class ExpandedQuery(BaseModel):
+    """Result of glossary expansion.
+
+    ``query`` is the plain bag of terms sent to BM25 and the vector store — it
+    never contains boolean operator tokens or excluded terms, because neither
+    BM25Okapi nor embedding search understands them. ``exclusions`` is applied
+    as a post-retrieval filter instead.
+    """
+
+    original: str
+    query: str
+    additions: list[str] = Field(default_factory=list)
+    exclusions: list[str] = Field(default_factory=list)
+
+    def display(self) -> str:
+        """Human-readable rendering with OR/NOT operators, for echoing to users."""
+        parts = [self.original]
+        parts += [f"OR {a}" for a in self.additions]
+        parts += [f"NOT {e}" for e in self.exclusions]
+        return " ".join(parts)
+
+    def changed(self) -> bool:
+        return bool(self.additions or self.exclusions or self.query != self.original)
 
 
 class RegulationChunk(BaseModel):

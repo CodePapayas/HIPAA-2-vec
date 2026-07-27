@@ -21,7 +21,7 @@ dependencies = [
     "lxml>=5.0",
     "platformdirs>=4.0",
     "click>=8.1",
-    "spacy>=3.7",
+    "rich>=13.0",
 ]
 
 [project.scripts]
