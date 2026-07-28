@@ -41,7 +41,10 @@
       "Bash(echo \"older date: $\\(curl -s -o /dev/null -w '%{http_code}' 'https://www.ecfr.gov/api/versioner/v1/full/2025-01-02/title-45.xml?part=164'\\)\")",
       "Bash(curl -s -o /dev/null -w '%{http_code}' 'https://www.ecfr.gov/api/versioner/v1/structure/2026-07-17/title-45.json')",
       "Bash(curl -s -o /dev/null -w '%{http_code}' --max-time 60 'https://www.ecfr.gov/api/versioner/v1/full/2026-07-17/title-42.xml?part=2')",
-      "Bash(echo \"ecfr full: $\\(curl -s -o /dev/null -w '%{http_code}' --max-time 60 'https://www.ecfr.gov/api/versioner/v1/full/2026-07-17/title-42.xml?part=2'\\)\")"
+      "Bash(echo \"ecfr full: $\\(curl -s -o /dev/null -w '%{http_code}' --max-time 60 'https://www.ecfr.gov/api/versioner/v1/full/2026-07-17/title-42.xml?part=2'\\)\")",
+      "Bash(.venv/bin/hipaa-mcp reindex *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   },
   "enabledMcpjsonServers": [
