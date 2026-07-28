@@ -268,6 +268,38 @@ class TestDefinitionSplitting:
         text = "Business associate means a person who creates protected health information."
         assert split_definitions(text) == [text]
 
+    def test_colon_form_definition_splits(self) -> None:
+        """§ 160.103 defines "Business associate:" with a colon, not "means"."""
+        blob = (
+            "Except as otherwise provided, the following definitions apply: "
+            + "ANSI stands for the American National Standards Institute. "
+            + "Business associate: (1) Except as provided in paragraph (4) of this "
+            + "definition, business associate means, with respect to a covered entity, "
+            + "a person who creates, receives, maintains, or transmits protected health "
+            + "information for a function regulated by this subchapter. " * 4
+            + "Covered entity means a health plan. "
+        )
+        parts = split_definitions(blob)
+        assert any(p.startswith("Business associate: (1)") for p in parts)
+        assert any(p.startswith("ANSI stands for") for p in parts)
+        assert not any(
+            p.startswith("ANSI") and "Business associate" in p for p in parts
+        ), "the business associate definition must not be folded into the ANSI chunk"
+
+    def test_continuation_clause_does_not_split(self) -> None:
+        """"X includes ..." continues the definition above; it never opens one."""
+        blob = (
+            "Health care means care, services, or supplies related to the health of "
+            + "an individual, furnished by a provider. " * 6
+            + "Health care includes, but is not limited to, the following: "
+            + "(1) Preventive, diagnostic, and therapeutic procedures. "
+            + "It includes the following types of information transmissions: "
+            + "(1) Health care claims or equivalent encounter information. "
+        )
+        parts = split_definitions(blob)
+        assert not any(p.startswith("Health care includes") for p in parts)
+        assert not any(p.startswith("It includes") for p in parts)
+
     def test_split_never_cuts_a_sentence(self) -> None:
         blob = (
             "The following definitions apply: "

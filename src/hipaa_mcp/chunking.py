@@ -198,11 +198,24 @@ def _split_markers(text: str) -> tuple[list[str], str]:
     return markers, body.strip()
 
 
-# A defined term opening a sentence: "Business associate means ...",
-# "ANSI stands for ...", "Disclosure includes ...". The lookbehind keeps the
+# A defined term opening a sentence: "Business associate: (1) ...",
+# "Covered entity means ...", "ANSI stands for ...". The lookbehind keeps the
 # split on a sentence boundary, so no chunk ever cuts a sentence in half.
+#
+# "includes" is deliberately absent: no CFR definition in the corpus opens with
+# it, but continuations do ("Health care includes, but is not limited to ...",
+# "It includes the following types ..."). Splitting on those orphans a fragment
+# from the term it belongs to.
+_DEFINED_TERM = r"[A-Z][A-Za-z0-9 ,'\-/()]{1,60}?"
+# The colon form has no verb to anchor on, so the term is kept narrow — letters,
+# spaces and hyphens only. Commas would let it swallow a clause such as
+# "Health care includes, but is not limited to, the following: (1) ...".
+_COLON_TERM = r"[A-Z][A-Za-z\- ]{1,40}?"
 _DEFINITION_START = re.compile(
-    r"(?<=[.:]\s)(?=[A-Z][A-Za-z0-9 ,'\-/()]{1,60}?\s(?:means|stands for|includes|has the same meaning)\b)"
+    rf"(?<=[.:]\s)(?="
+    rf"{_DEFINED_TERM}\s(?:means|stands for|has the same meaning)\b"
+    rf"|{_COLON_TERM}:\s*\(1\)"
+    rf")"
 )
 
 # Definitions sections pack many terms into one <P>; below this length a
