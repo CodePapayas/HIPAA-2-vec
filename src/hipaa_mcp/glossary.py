@@ -3,52 +3,60 @@ from __future__ import annotations
 import importlib.resources
 import re
 import shutil
+import sys
+from contextlib import ExitStack
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import yaml
 
 from hipaa_mcp.config import get_settings
-from hipaa_mcp.models import Glossary, GlossaryEntry, GlossaryMatch, Relationship
-
-if TYPE_CHECKING:
-    import spacy as spacy_type
-
-_nlp: spacy_type.language.Language | None = None
-
-
-def _get_nlp() -> spacy_type.language.Language | None:
-    global _nlp
-    if _nlp is not None:
-        return _nlp
-    try:
-        import spacy
-
-        _nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
-        return _nlp
-    except (ImportError, OSError):
-        return None
+from hipaa_mcp.models import (
+    ExpandedQuery,
+    Glossary,
+    GlossaryEntry,
+    GlossaryMatch,
+    Relationship,
+)
 
 
 class GlossaryError(Exception):
     pass
 
 
-def _seed_path() -> Path:
-    ref = importlib.resources.files("hipaa_mcp") / "../../data/seed_glossary.yaml"
-    return Path(str(ref))
+def _warn(message: str) -> None:
+    """Warnings go to stderr.
+
+    The MCP server speaks JSON-RPC over stdout; any stray stdout write from a
+    tool call corrupts the transport framing.
+    """
+    print(message, file=sys.stderr)
+
+
+def _copy_seed_to(path: Path) -> bool:
+    """Copy the packaged seed glossary to ``path``. Returns False if unavailable."""
+    try:
+        ref = importlib.resources.files("hipaa_mcp") / "data" / "seed_glossary.yaml"
+        with ExitStack() as stack:
+            seed = stack.enter_context(importlib.resources.as_file(ref))
+            if not seed.is_file():
+                return False
+            shutil.copy(seed, path)
+        return True
+    except (FileNotFoundError, ModuleNotFoundError, OSError):
+        return False
 
 
 def _ensure_glossary_exists(path: Path) -> None:
     if path.exists():
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    seed = _seed_path()
-    if seed.exists():
-        shutil.copy(seed, path)
-    else:
-        # Write minimal valid glossary if seed missing
-        path.write_text("version: 1\nentries: []\n")
+    if _copy_seed_to(path):
+        return
+    _warn(
+        f"[glossary] Packaged seed glossary not found; wrote an empty glossary to {path}. "
+        "Reinstall hipaa-mcp or add terms with `add_glossary_term`."
+    )
+    path.write_text("version: 1\nentries: []\n")
 
 
 def load_glossary(path: Path | None = None) -> Glossary:
@@ -69,7 +77,7 @@ def load_glossary(path: Path | None = None) -> Glossary:
         try:
             entries.append(GlossaryEntry.model_validate(item))
         except Exception as exc:
-            print(f"[glossary] Skipping entry {i} — {exc}: {item!r}")
+            _warn(f"[glossary] Skipping entry {i} — {exc}: {item!r}")
 
     return Glossary(entries=entries, version=version)
 
@@ -84,13 +92,17 @@ def save_glossary(glossary: Glossary, path: Path | None = None) -> None:
     resolved.write_text(yaml.dump(data, default_flow_style=False, allow_unicode=True))
 
 
-def _token_pos_map(query: str) -> dict[str, str]:
-    """Return lowercase-token → POS tag for each token in query, or {} if spaCy unavailable."""
-    nlp = _get_nlp()
-    if nlp is None:
-        return {}
-    doc = nlp(query)
-    return {token.text.lower(): token.pos_ for token in doc}
+def _word_pattern(term: str) -> re.Pattern[str]:
+    """Word-boundary pattern for a glossary term.
+
+    Substring matching is wrong here: `log` would match `biology`, and a bare
+    `re.sub` of `share` turns `shared` into `disclosured`.
+    """
+    return re.compile(rf"(?<!\w){re.escape(term)}(?!\w)", re.IGNORECASE)
+
+
+def contains_term(text: str, term: str) -> bool:
+    return _word_pattern(term).search(text) is not None
 
 
 def _glossary_match_confidence(entry: GlossaryEntry, scope_triggered: list[str]) -> float:
@@ -109,87 +121,60 @@ def _glossary_match_confidence(entry: GlossaryEntry, scope_triggered: list[str])
             return 1.0
 
 
-def expand_query(query: str, glossary: Glossary) -> tuple[str, list[GlossaryMatch]]:
-    q_lower = query.lower()
-    pos_map = _token_pos_map(query)
+def _match(entry: GlossaryEntry, scope_triggered: list[str] | None = None) -> GlossaryMatch:
+    return GlossaryMatch(
+        term=entry.term,
+        maps_to=entry.maps_to,
+        relationship=entry.relationship,
+        scope_triggered=scope_triggered or None,
+        confidence=_glossary_match_confidence(entry, scope_triggered or []),
+    )
 
-    result = query
+
+def expand_query(query: str, glossary: Glossary) -> tuple[ExpandedQuery, list[GlossaryMatch]]:
+    """Expand a plain-English query with regulatory vocabulary.
+
+    The retrieval query is a plain bag of terms. Boolean operators are not
+    emitted: neither BM25Okapi nor embedding search understands them, so an
+    `anti` entry rendered as `NOT <term>` would inject the very term it means
+    to exclude. Exclusions are returned separately and applied as a
+    post-retrieval filter.
+    """
     additions: list[str] = []
     exclusions: list[str] = []
     matches: list[GlossaryMatch] = []
 
     for entry in glossary.entries:
-        term = entry.term.lower()
-        if term not in q_lower:
-            continue
-
-        # POS disambiguation for single-word terms: if the term appears as a
-        # VERB in context, substitute it directly rather than appending a
-        # synonym. This prevents noun-sense BM25 false matches (e.g. "building"
-        # the facility vs. "building" the software).
-        pos = pos_map.get(term)
-        if pos == "VERB" and entry.relationship in (Relationship.synonym, Relationship.hyponym):
-            result = re.sub(re.escape(entry.term), entry.maps_to, result, flags=re.IGNORECASE)
-            matches.append(
-                GlossaryMatch(
-                    term=entry.term,
-                    maps_to=entry.maps_to,
-                    relationship=entry.relationship,
-                    confidence=_glossary_match_confidence(entry, []),
-                )
-            )
+        if not contains_term(query, entry.term):
             continue
 
         match entry.relationship:
-            case Relationship.synonym:
+            case Relationship.synonym | Relationship.hyponym:
                 additions.append(entry.maps_to)
-                matches.append(
-                    GlossaryMatch(
-                        term=entry.term,
-                        maps_to=entry.maps_to,
-                        relationship=entry.relationship,
-                        confidence=_glossary_match_confidence(entry, []),
-                    )
-                )
-            case Relationship.hyponym:
-                additions.append(entry.maps_to)
-                matches.append(
-                    GlossaryMatch(
-                        term=entry.term,
-                        maps_to=entry.maps_to,
-                        relationship=entry.relationship,
-                        confidence=_glossary_match_confidence(entry, []),
-                    )
-                )
+                matches.append(_match(entry))
             case Relationship.contextual:
-                scope_words = entry.scope or []
-                triggered = [s for s in scope_words if s.lower() in q_lower]
+                triggered = [s for s in (entry.scope or []) if contains_term(query, s)]
                 if triggered:
                     additions.append(entry.maps_to)
-                    matches.append(
-                        GlossaryMatch(
-                            term=entry.term,
-                            maps_to=entry.maps_to,
-                            relationship=entry.relationship,
-                            scope_triggered=triggered,
-                            confidence=_glossary_match_confidence(entry, triggered),
-                        )
-                    )
+                    matches.append(_match(entry, triggered))
             case Relationship.anti:
                 exclusions.append(entry.maps_to)
-                matches.append(
-                    GlossaryMatch(
-                        term=entry.term,
-                        maps_to=entry.maps_to,
-                        relationship=entry.relationship,
-                        confidence=_glossary_match_confidence(entry, []),
-                    )
-                )
+                matches.append(_match(entry))
 
+    kept_additions: list[str] = []
+    retrieval_query = query
     for add in additions:
-        if add.lower() not in result.lower():
-            result = f"{result} OR {add}"
-    for excl in exclusions:
-        result = f"{result} NOT {excl}"
+        if contains_term(retrieval_query, add):
+            continue
+        kept_additions.append(add)
+        retrieval_query = f"{retrieval_query} {add}"
 
-    return result, matches
+    return (
+        ExpandedQuery(
+            original=query,
+            query=retrieval_query,
+            additions=kept_additions,
+            exclusions=exclusions,
+        ),
+        matches,
+    )

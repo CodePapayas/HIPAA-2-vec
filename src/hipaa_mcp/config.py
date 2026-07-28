@@ -8,6 +8,13 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Bumped whenever the on-disk index layout or semantics change, so a stale
+# index produces a clear "run hipaa-mcp reindex" message instead of wrong scores.
+#   1 → pickled BM25 index, Chroma collection using default (L2) distance
+#   2 → JSON BM25 index, Chroma collection using cosine distance
+INDEX_FORMAT = 2
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="HIPAA_MCP_", env_file=".env", extra="ignore")
 
@@ -24,7 +31,7 @@ class Settings(BaseSettings):
 
     @property
     def bm25_index_path(self) -> Path:
-        return self.data_dir / "bm25_index.pkl"
+        return self.data_dir / "bm25_index.json"
 
     @property
     def glossary_path(self) -> Path:

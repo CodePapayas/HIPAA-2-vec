@@ -13,12 +13,18 @@ def main() -> None:
 
 
 @main.command()
-def serve() -> None:
+@click.option(
+    "--fancy",
+    is_flag=True,
+    default=False,
+    help="Animate the boot screen. Adds several seconds before the server listens.",
+)
+def serve(fancy: bool) -> None:
     """Run the MCP server over stdio."""
     from hipaa_mcp.boot import boot_screen
     from hipaa_mcp.server import mcp
 
-    boot_screen(mode="serve")
+    boot_screen(mode="serve", animate=fancy)
     mcp.run()
 
 
@@ -29,7 +35,7 @@ def reindex(as_of: str | None) -> None:
     from hipaa_mcp.boot import boot_screen
     from hipaa_mcp.ingest import reindex as _reindex
 
-    boot_screen(mode="reindex")
+    boot_screen(mode="reindex", animate=True)
 
     parsed_date: date | None = None
     if as_of:

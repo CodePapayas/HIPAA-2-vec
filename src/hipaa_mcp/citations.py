@@ -12,43 +12,68 @@ class CitationParseError(ValueError):
         super().__init__(f"Cannot parse citation {raw!r}: {reason}")
 
 
+# Parts carried by the indexed corpus, keyed by CFR title.
+SUPPORTED_PARTS: dict[int, set[int]] = {
+    45: {160, 162, 164},
+    42: {2},
+}
+
+_PART_TO_TITLE: dict[int, int] = {
+    part: title for title, parts in SUPPORTED_PARTS.items() for part in parts
+}
+
 _SECTION_PAT = re.compile(
     r"""
-    (?:
-        (?P<title>\d+)\s+CFR\s+   # "45 CFR " or "42 CFR "
-        |
-        (?:§+|[Ss]ec(?:tion|\.)?)\s*  # § / Sec. / Section
-    )?
-    (?P<part>\d+)\.(?P<section>\d+)  # part.section
-    (?P<subs>(?:\([^)]+\))*)         # optional subdivisions
+    (?:(?:§+|[Ss]ec(?:tion|\.)?)\s*)?    # optional leading § / Sec. / Section
+    (?:(?P<title>\d+)\s+CFR\s*)?         # optional "45 CFR " / "42 CFR "
+    (?:§+\s*)?                           # optional § after the CFR designation
+    (?P<part>\d+)\.(?P<section>\d+)      # part.section
+    (?P<subs>(?:\([^()]+\))*)            # optional subdivisions
     """,
     re.VERBOSE,
 )
 
-_SUB_PAT = re.compile(r"\(([^)]+)\)")
+_SUB_PAT = re.compile(r"\(([^()]+)\)")
+
+
+def _supported_parts_message() -> str:
+    return "; ".join(
+        f"title {title}: {sorted(parts)}" for title, parts in sorted(SUPPORTED_PARTS.items())
+    )
 
 
 def parse(raw: str) -> Citation:
-    cleaned = raw.strip()
-    m = _SECTION_PAT.search(cleaned)
+    # Anchored match: the whole string must be a citation. A `.search` here
+    # would happily turn "version 1.2 of doc" into § 1.2 — a wrong-but-plausible
+    # citation is the worst failure mode this tool has.
+    cleaned = " ".join(raw.split())
+    m = _SECTION_PAT.fullmatch(cleaned)
     if not m:
-        raise CitationParseError(raw, "no recognizable section number found")
+        raise CitationParseError(raw, "not a citation (expected e.g. '164.308(a)(1)')")
 
     title_str = m.group("title")
     part = int(m.group("part"))
     section = int(m.group("section"))
-    subs_str = m.group("subs") or ""
-    subdivisions = _SUB_PAT.findall(subs_str)
+    subdivisions = _SUB_PAT.findall(m.group("subs") or "")
 
-    # Infer title from part if not explicit
     if title_str is not None:
         title = int(title_str)
-    elif part in range(160, 200):
-        title = 45
-    elif part == 2:
-        title = 42
+        if title not in SUPPORTED_PARTS:
+            raise CitationParseError(
+                raw, f"unsupported CFR title {title} (supported: {_supported_parts_message()})"
+            )
     else:
-        title = 45  # default for HIPAA context
+        inferred = _PART_TO_TITLE.get(part)
+        if inferred is None:
+            raise CitationParseError(
+                raw, f"unsupported part {part} (supported: {_supported_parts_message()})"
+            )
+        title = inferred
+
+    if part not in SUPPORTED_PARTS[title]:
+        raise CitationParseError(
+            raw, f"part {part} is not part of title {title} (supported: {_supported_parts_message()})"
+        )
 
     return Citation(title=title, part=part, section=section, subdivisions=subdivisions)
 
